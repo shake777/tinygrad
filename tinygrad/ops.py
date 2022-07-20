@@ -248,11 +248,10 @@ class LazyBuffer:
   # TODO: permute to put all the reduce axis at the end
   def reduce_op(x:LazyBuffer, op:ReduceOps, new_shape:Tuple[int, ...]) -> LazyBuffer:
     if x.shape == tuple(new_shape): return x
-    if getattr(x.dbuffer, "REQUIRES_SIMPLE_REDUCE", False) and (len(new_shape) != 2 or new_shape[1] != 1):
-      num, red = prod([s for s,n in zip(x.shape, new_shape) if n != 1]), prod([s for s,n in zip(x.shape, new_shape) if n == 1])
-      x = x.movement_op(MovementOps.PERMUTE, [i for i,n in enumerate(new_shape) if n != 1] + [i for i,n in enumerate(new_shape) if n == 1])
-      x = x.movement_op(MovementOps.RESHAPE, (num, red))
-      return x.reduce_op(op, (num, 1)).movement_op(MovementOps.RESHAPE, new_shape)
+    permute_arg = [i for i,(s,n) in enumerate(zip(x.shape, new_shape)) if s == n] + [i for i,(s,n) in enumerate(zip(x.shape, new_shape)) if s != n]
+    if getattr(x.dbuffer, "REQUIRES_SIMPLE_REDUCE", False) and tuple(permute_arg) != tuple(range(len(permute_arg))):
+      x = x.movement_op(MovementOps.PERMUTE, permute_arg)
+      return x.reduce_op(op, [new_shape[a] for a in permute_arg]).movement_op(MovementOps.RESHAPE, new_shape)
     else:
       return LazyBuffer(x.device, tuple(new_shape), ReduceOps, LazyOp(op, (x,), tuple(new_shape)))
 
