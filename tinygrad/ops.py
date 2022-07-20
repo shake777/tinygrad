@@ -278,6 +278,10 @@ class LazyBuffer:
     if op == MovementOps.PERMUTE and x.realized is None and x.op.op == op: return x.op.src[0].movement_op(op, tuple(x.op.arg[i] for i in arg))
     if op == MovementOps.PAD and x.realized is None and x.op.op == op: return x.op.src[0].movement_op(op, tuple((b1+b2, e1+e2) for (b1,e1),(b2,e2) in zip(x.op.arg, arg)))
 
+    # move permutes before expands
+    if op == MovementOps.PERMUTE and x.realized is None and x.op.op == MovementOps.EXPAND:
+      return x.op.src[0].movement_op(MovementOps.PERMUTE, arg).movement_op(MovementOps.EXPAND, [x.op.arg[a] for a in arg])
+
     # some permutes are actually just reshapes
     if op == MovementOps.PERMUTE and ShapeTracker(x.shape).movement_op(op, arg).contiguous: return x.movement_op(MovementOps.RESHAPE, tuple(x.shape[i] for i in arg))
 
