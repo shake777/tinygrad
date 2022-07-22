@@ -295,6 +295,16 @@ class LazyBuffer:
         return x.op.src[0].movement_op(MovementOps.PERMUTE, tuple(new_arg)) \
           .movement_op(MovementOps.RESHAPE, ShapeTracker(x.st).movement_op(op, arg).shape)
 
+    # hmm, this can be a bad choice if the buffer has other children
+    # TODO: do this at resolve time
+    if x.optype == ReduceOps and op == MovementOps.PERMUTE: # and False: # and len(x.op.src[0].children) == 1:
+      # reduceops have one buffer input, permute it
+      narg = [x.op.arg[arg[i]] for i in range(len(arg))]
+      src, rop = x.op.src[0], x.op.op
+      src.children = [y for y in src.children if x != y]
+      del x  # TODO: why doesn't this delete remove it from the children
+      return src.movement_op(op, arg).reduce_op(rop, narg)
+
     # some permutes are actually just reshapes
     if op == MovementOps.PERMUTE and ShapeTracker(x.shape).movement_op(op, arg).contiguous: return x.movement_op(MovementOps.RESHAPE, tuple(x.shape[i] for i in arg))
 
