@@ -4,7 +4,7 @@ from typing import Optional, Tuple, NamedTuple, Union, Any, List, Dict, Type
 from copy import copy
 import os, sys, functools, itertools, operator, weakref
 from tinygrad.helpers import ConvArgs, get_available_llops, prod
-from tinygrad.shapetracker import ShapeTracker
+from tinygrad.shapetracker import ShapeTracker, get_contraction
 
 # lazy can recurse a lot
 sys.setrecursionlimit(10000)
@@ -278,8 +278,22 @@ class LazyBuffer:
     if op == MovementOps.PAD and x.realized is None and x.op.op == op: return x.op.src[0].movement_op(op, tuple((b1+b2, e1+e2) for (b1,e1),(b2,e2) in zip(x.op.arg, arg)))
 
     # move permutes before expands
-    if op == MovementOps.PERMUTE and x.realized is None and x.op.op == MovementOps.EXPAND:
-      return x.op.src[0].movement_op(MovementOps.PERMUTE, arg).movement_op(MovementOps.EXPAND, [x.op.arg[a] for a in arg])
+    if op == MovementOps.PERMUTE and x.realized is None and x.op.op == MovementOps.EXPAND: return x.op.src[0].movement_op(MovementOps.PERMUTE, arg).movement_op(MovementOps.EXPAND, [x.op.arg[a] for a in arg])
+
+    # move permutes before reshapes
+    if op == MovementOps.PERMUTE and x.op.op == MovementOps.RESHAPE and x.realized is None and isinstance(x.op.src[0], LazyBuffer):
+      contraction = get_contraction(x.op.src[0].shape, x.shape)
+      if contraction is not None:
+        numbered = []
+        start = 0
+        for c in contraction:
+          numbered.append(list(range(start, start+len(c))))
+          start += len(c)
+        new_arg = []
+        for p in arg:
+          new_arg += numbered[p]
+        return x.op.src[0].movement_op(MovementOps.PERMUTE, tuple(new_arg)) \
+          .movement_op(MovementOps.RESHAPE, ShapeTracker(x.st).movement_op(op, arg).shape)
 
     # some permutes are actually just reshapes
     if op == MovementOps.PERMUTE and ShapeTracker(x.shape).movement_op(op, arg).contiguous: return x.movement_op(MovementOps.RESHAPE, tuple(x.shape[i] for i in arg))
