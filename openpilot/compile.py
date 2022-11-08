@@ -28,6 +28,8 @@ def get_random_input_tensors(input_shapes):
     "big_input_imgs": np.random.randn(*(1, 12, 128, 256))*256,
     "desire": np.zeros((1,100, 8)),
     "traffic_convention": np.array([[1., 0.]]),
+    "driving_style": np.zeros(10),
+    "passenger": np.zeros(2),
     #"features_buffer": np.random.randn(*(1, 99, 128))
     "features_buffer": np.random.randn(*input_shapes['features_buffer'])
     #"initial_state": np.zeros((1, 768))
